@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*'  # Triggers only on tags that follow the pattern v*
 
+permissions:
+  contents: write 
+
 jobs:
   build:
     runs-on: ubuntu-latest
