@@ -7,6 +7,11 @@
       },
       {
         "path": "/settings",
+        "method": "GET",
+        "data": {"theme": "darker"}
+      },
+      {
+        "path": "/users",
         "method": "POST",
         "data": {"theme": "dark"}
       }
