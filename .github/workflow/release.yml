@@ -1,0 +1,91 @@
+name: Build and Release Go Server
+
+on:
+  push:
+    tags:
+      - 'v*'  # Triggers only on tags that follow the pattern v*
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        goos: [linux, windows, darwin]
+        goarch: [amd64, arm64]
+        exclude:
+          # Exclude invalid combinations (e.g., arm64 on windows)
+          - goos: windows
+            goarch: arm64
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21' # or the version of Go you are using
+
+    - name: Build binary
+      run: |
+        mkdir -p build
+        GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o build/server-${{ matrix.goos }}-${{ matrix.goarch }}
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: server-${{ matrix.goos }}-${{ matrix.goarch }}
+        path: build/server-${{ matrix.goos }}-${{ matrix.goarch }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Download artifacts from build
+      uses: actions/download-artifact@v3
+      with:
+        path: build
+
+    - name: Create GitHub Release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref_name }}
+        release_name: "Release ${{ github.ref_name }}"
+        draft: false
+        prerelease: false
+
+    - name: Upload Release Assets
+      uses: actions/upload-release-asset@v1
+      with:
+        upload_url: ${{ steps.create-release.outputs.upload_url }}
+        asset_path: build/server-linux-amd64
+        asset_name: server-linux-amd64
+        asset_content_type: application/octet-stream
+
+    - name: Upload Release Assets (Windows)
+      uses: actions/upload-release-asset@v1
+      with:
+        upload_url: ${{ steps.create-release.outputs.upload_url }}
+        asset_path: build/server-windows-amd64.exe
+        asset_name: server-windows-amd64.exe
+        asset_content_type: application/octet-stream
+
+    - name: Upload Release Assets (Mac Intel)
+      uses: actions/upload-release-asset@v1
+      with:
+        upload_url: ${{ steps.create-release.outputs.upload_url }}
+        asset_path: build/server-darwin-amd64
+        asset_name: server-darwin-amd64
+        asset_content_type: application/octet-stream
+
+    - name: Upload Release Assets (Mac Apple Silicon)
+      uses: actions/upload-release-asset@v1
+      with:
+        upload_url: ${{ steps.create-release.outputs.upload_url }}
+        asset_path: build/server-darwin-arm64
+        asset_name: server-darwin-arm64
+        asset_content_type: application/octet-stream

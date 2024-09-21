@@ -1,0 +1,14 @@
+{
+    "routes": [
+      {
+        "path": "/users",
+        "method": "GET",
+        "data": "json://example/data/users.json"
+      },
+      {
+        "path": "/settings",
+        "method": "POST",
+        "data": {"theme": "dark"}
+      }
+    ]
+  }
