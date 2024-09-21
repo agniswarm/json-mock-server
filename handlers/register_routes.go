@@ -12,36 +12,61 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func RegisterRoutes(server *gin.Engine, routes []types.Route) {
+func RegisterRoutes(server *gin.Engine, routes []types.Route) error {
 	for _, route := range routes {
-		fillRouteData(server, route)
+		if err := fillRouteData(server, route); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
-func fillRouteData(server *gin.Engine, route types.Route) {
+// Function to validate duplicate routes if the method and routes are same
+func CheckDuplicateRoutes(routes []types.Route) error {
+	uniqueRoutes := make(map[string]bool)
+	for _, route := range routes {
+		routeKey := fmt.Sprintf("%s:%s", route.Method, route.Path)
+		if _, ok := uniqueRoutes[routeKey]; ok {
+			return fmt.Errorf("duplicate route found: %v %v", route.Method, route.Path)
+		}
+		uniqueRoutes[routeKey] = true
+	}
+	return nil
+}
+
+func fillRouteData(server *gin.Engine, route types.Route) error {
 	if route.StatusCode == 0 {
 		route.StatusCode = http.StatusOK
 	}
 
+	responseData, err := prepareResponseData(route.Data)
+	if err != nil {
+		return fmt.Errorf("error preparing response data for route: %v", route.Path)
+	}
+
+	okRoute := false
+
+	for _, m := range []string{"GET", "POST"} {
+		if m == route.Method {
+			okRoute = true
+			break
+		}
+	}
+
+	if !okRoute {
+		return fmt.Errorf("invalid route method: %v", route.Method)
+	}
+
 	if route.Method == http.MethodGet {
 		server.GET(route.Path, func(c *gin.Context) {
-			responseData, err := prepareResponseData(route.Data)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
 			c.JSON(route.StatusCode, responseData)
 		})
 	} else if route.Method == http.MethodPost {
 		server.POST(route.Path, func(c *gin.Context) {
-			responseData, err := prepareResponseData(route.Data)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
 			c.JSON(route.StatusCode, responseData)
 		})
 	}
+	return nil
 }
 
 // Function to prepare response data

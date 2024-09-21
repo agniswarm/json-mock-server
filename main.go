@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -11,35 +10,17 @@ import (
 	"os/signal"
 
 	"github.com/agniswarm/json-mock-server/handlers"
-	"github.com/agniswarm/json-mock-server/types"
+	"github.com/agniswarm/json-mock-server/helpers"
+	"github.com/agniswarm/json-mock-server/notifier"
 	"github.com/gin-gonic/gin"
 )
-
-// Function to load JSON fixture data with validation
-func loadFixture(jsonPath string) ([]types.Route, error) {
-	data, err := os.ReadFile(jsonPath)
-	if err != nil {
-		return []types.Route{}, fmt.Errorf("failed to read file: %v", err)
-	}
-
-	var fixture types.Fixture
-	if err := json.Unmarshal(data, &fixture); err != nil {
-		return []types.Route{}, fmt.Errorf("error parsing json: %v", err)
-	}
-
-	// Validate routes and their data
-	for _, route := range fixture.Routes {
-		if err := route.ValidateRoute(); err != nil {
-			return []types.Route{}, err
-		}
-	}
-	return fixture.Routes, nil
-}
 
 func main() {
 	// Define command-line flags
 	filePath := flag.String("file", "", "Path to the JSON file containing routes")
 	port := flag.String("port", "3000", "Port on which to run the server (default: 3000)")
+	devMode := flag.Bool("devmode", false, "Enable dev mode to watch for file changes")
+
 	flag.Parse()
 
 	// Check if the file argument is provided
@@ -49,39 +30,62 @@ func main() {
 	}
 
 	// Load the fixture from the specified file
-	routes, err := loadFixture(*filePath)
+	routes, err := helpers.LoadFixture(*filePath)
+
 	if err != nil {
-		fmt.Printf("Error loading fixture: %v\n", err)
+		fmt.Printf("Error loading routes: %v\n", err)
 		os.Exit(1)
 	}
 
-	gin.SetMode(gin.ReleaseMode)
-	// Create a new Gin router
-	server := gin.Default()
-	// Start the server
 	httpServer := &http.Server{
-		Addr:    fmt.Sprintf(":%s", *port),
-		Handler: server,
+		Addr: fmt.Sprintf(":%s", *port),
 	}
 
-	// Register routes
-	handlers.RegisterRoutes(server, routes)
-
 	stop := make(chan os.Signal, 1)
-
-	// Define the exit server route
-	server.GET("/exit-server", handlers.ExitServerHandler(httpServer, stop))
-
-	// Handle system signals to shut down gracefully
 	signal.Notify(stop, os.Interrupt)
 
-	go func() {
-		// Start the server
-		log.Printf("Starting server on port %s...\n", *port)
-		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Could not listen on port %s: %v", *port, err)
-		}
-	}()
+	if !*devMode {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
+	server := gin.Default()
+	reload := make(chan bool)
+
+	// Activate watch mode only if --devmode flag is passed
+	if *devMode {
+		go notifier.WatchFileChanges(*filePath, reload)
+
+		go func() {
+			for {
+				<-reload
+				log.Println("Reloading routes...")
+				routes, err := helpers.LoadFixture(*filePath)
+				if err != nil {
+					log.Printf("Error reloading routes: %v", err)
+					continue
+				}
+
+				server = gin.New() // Clear existing routes
+
+				httpServer.Shutdown(context.TODO())
+
+				httpServer = &http.Server{
+					Addr: fmt.Sprintf(":%s", *port),
+				}
+
+				if err := handlers.CheckDuplicateRoutes(routes); err != nil {
+					log.Println(err.Error())
+					log.Println("Server will not start, please duplicate route error")
+					continue
+				}
+
+				httpServer.Handler = server
+				go helpers.StartServer(httpServer, routes, server, stop)
+			}
+		}()
+	}
+
+	go helpers.StartServer(httpServer, routes, server, stop)
 
 	// Wait for a signal to stop the server
 	<-stop
