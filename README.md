@@ -9,7 +9,7 @@
 ### OPTIONS
 
 --port :default 3000 \
---file : it is required
+--file : it is required \
 --devmode: flag to enable when you want to make changes and see the changes realtime
 
 ### Example JSON File
