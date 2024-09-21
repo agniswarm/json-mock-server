@@ -3,10 +3,10 @@ name: Build and Release Go Server
 on:
   push:
     tags:
-      - 'v*'  # Triggers only on tags that follow the pattern v*
+      - 'v*'
 
 permissions:
-  contents: write 
+  contents: write
 
 jobs:
   build:
@@ -17,7 +17,6 @@ jobs:
         goos: [linux, windows, darwin]
         goarch: [amd64, arm64]
         exclude:
-          # Exclude invalid combinations (e.g., arm64 on windows)
           - goos: windows
             goarch: arm64
 
@@ -28,7 +27,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.21' # or the version of Go you are using
+        go-version: '1.21'
 
     - name: Build binary
       run: |
@@ -52,7 +51,7 @@ jobs:
         path: build
 
     - name: Create GitHub Release
-      id: create_release
+      id: create_release  # Assign an ID to reference the outputs later
       uses: actions/create-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -62,34 +61,34 @@ jobs:
         draft: false
         prerelease: false
 
-    - name: Upload Release Assets
+    - name: Upload Release Asset (Linux)
       uses: actions/upload-release-asset@v1
       with:
-        upload_url: ${{ steps.create-release.outputs.upload_url }}
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: build/server-linux-amd64
         asset_name: server-linux-amd64
         asset_content_type: application/octet-stream
 
-    - name: Upload Release Assets (Windows)
+    - name: Upload Release Asset (Windows)
       uses: actions/upload-release-asset@v1
       with:
-        upload_url: ${{ steps.create-release.outputs.upload_url }}
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: build/server-windows-amd64.exe
         asset_name: server-windows-amd64.exe
         asset_content_type: application/octet-stream
 
-    - name: Upload Release Assets (Mac Intel)
+    - name: Upload Release Asset (Mac Intel)
       uses: actions/upload-release-asset@v1
       with:
-        upload_url: ${{ steps.create-release.outputs.upload_url }}
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: build/server-darwin-amd64
         asset_name: server-darwin-amd64
         asset_content_type: application/octet-stream
 
-    - name: Upload Release Assets (Mac Apple Silicon)
+    - name: Upload Release Asset (Mac Apple Silicon)
       uses: actions/upload-release-asset@v1
       with:
-        upload_url: ${{ steps.create-release.outputs.upload_url }}
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: build/server-darwin-arm64
         asset_name: server-darwin-arm64
         asset_content_type: application/octet-stream
